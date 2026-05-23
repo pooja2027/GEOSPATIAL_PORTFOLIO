@@ -69,7 +69,7 @@ Upload CSV → Choose clustering algorithm → Explore map → Export results
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/geovista.git
+git clone https://github.com/pooja2027/geovista.git
 cd geovista
 
 # 2. Create a virtual environment (recommended)
@@ -163,5 +163,5 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 <div align="center">
 Made with 🌊 from Chennai &nbsp;·&nbsp;
-<a href="https://github.com/YOUR_USERNAME">@YOUR_USERNAME</a>
+<a href="https://github.com/pooja2027">@pooja2027</a>
 </div>
