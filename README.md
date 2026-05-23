@@ -1,5 +1,7 @@
-# 🌍 Geospatial Portfolio — Pooja P.
 
+<div align="center">
+  <h1> 🌍 Geospatial Portfolio — Pooja P.</h1>
+</div>
 <div align="center">
 
 ![Geoinformatics](https://img.shields.io/badge/Geoinformatics-Engineering-0ea5e9?style=flat-square)
