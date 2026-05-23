@@ -1,0 +1,31 @@
+project_id,project_name,type,latitude,longitude,cost_crore,status,district,year
+P001,Chennai Metro Phase 2,Infrastructure,13.0827,80.2707,4200,Active,Chennai,2022
+P002,Anna Nagar Flyover,Infrastructure,13.0858,80.2101,185,Completed,Chennai,2021
+P003,Tidel Park Expansion,Commercial,12.9916,80.2476,320,Active,Chennai,2023
+P004,Coimbatore Smart Road,Infrastructure,11.0168,76.9558,95,Active,Coimbatore,2022
+P005,Peelamedu IT Park,Commercial,11.0270,77.0035,560,Planning,Coimbatore,2023
+P006,Madurai Ring Road,Infrastructure,9.9252,78.1198,430,Active,Madurai,2022
+P007,Meenakshi Mall Expansion,Commercial,9.9195,78.1228,210,Completed,Madurai,2021
+P008,Trichy Airport Terminal,Infrastructure,10.7603,78.7137,780,Active,Tiruchirappalli,2023
+P009,Srirangam Bridge,Infrastructure,10.8651,78.6922,145,Planning,Tiruchirappalli,2022
+P010,Salem Steel Township,Residential,11.6643,78.1460,890,Active,Salem,2023
+P011,Erode Textile Hub,Commercial,11.3410,77.7172,275,Completed,Erode,2021
+P012,Tirunelveli Solar Farm,Industrial,8.7139,77.7567,1200,Active,Tirunelveli,2023
+P013,Tuticorin Port Expansion,Infrastructure,8.7642,78.1348,3400,Active,Thoothukudi,2022
+P014,Vellore Smart City,Residential,12.9165,79.1325,650,Planning,Vellore,2023
+P015,Thanjavur Heritage Walk,Tourism,10.7870,79.1378,45,Completed,Thanjavur,2021
+P016,Puducherry Coastal Road,Infrastructure,11.9416,79.8083,320,Active,Puducherry,2022
+P017,Hosur Industrial Zone,Industrial,12.7409,77.8253,1800,Active,Krishnagiri,2023
+P018,Kancheepuram Silk Park,Commercial,12.8185,79.6947,180,Planning,Kancheepuram,2023
+P019,Tambaram Residential Complex,Residential,12.9249,80.1000,420,Active,Chennai,2022
+P020,Ooty Eco Resort,Tourism,11.4102,76.6950,95,Completed,Nilgiris,2021
+P021,Karur Textile Mill,Industrial,10.9601,78.0766,310,Active,Karur,2022
+P022,Namakkal Highway Bypass,Infrastructure,11.2189,78.1674,265,Planning,Namakkal,2023
+P023,Dindigul Fort Restoration,Tourism,10.3624,77.9695,35,Active,Dindigul,2022
+P024,Nagapattinam Coastal Housing,Residential,10.7672,79.8449,380,Active,Nagapattinam,2022
+P025,Dharmapuri Solar Grid,Industrial,12.1211,78.1582,950,Planning,Dharmapuri,2023
+P026,Ramanathapuram Fisheries Hub,Industrial,9.3639,78.8395,220,Active,Ramanathapuram,2022
+P027,Sivaganga Road Network,Infrastructure,9.8477,78.4801,175,Completed,Sivaganga,2021
+P028,Virudhunagar Cotton Hub,Industrial,9.5810,77.9624,290,Active,Virudhunagar,2022
+P029,Thiruvarur Paddy Processing,Industrial,10.7731,79.6359,145,Planning,Thiruvarur,2023
+P030,Ariyalur Cement Plant,Industrial,11.1429,79.0769,2100,Active,Ariyalur,2023

@@ -1,253 +1,153 @@
-import ee
-import folium
-from geopy.geocoders import Nominatim
-import osmnx as ox
-import geopandas as gpd
-from shapely.geometry import Point
-import matplotlib.pyplot as plt
-import os
+"""
+NDVI_Region_Tool.py
+-------------------
+CLI entry point for NDVI Vegetation Analysis.
+Usage: python NDVI_Region_Tool.py
+       (reads place name from stdin — used by Streamlit subprocess call)
 
-print("\nNDVI Vegetation Monitoring Tool\n")
-
-# Initialize Earth Engine
-try:
-    ee.Initialize()
-except:
-    ee.Authenticate()
-    ee.Initialize(project="earthengine-pooja")
-
-# User input
-place = input("Enter place name: ")
-
-geolocator = Nominatim(user_agent="geo_app")
-location = geolocator.geocode(place)
-
-if location is None:
-    print("Location not found")
-    exit()
-
-lat = location.latitude
-lon = location.longitude
-print(f"Coordinates: {lat}, {lon}")
-
-# Get boundary from OpenStreetMap
-print("Downloading boundary from OpenStreetMap...")
-
-try:
-    gdf = ox.geocode_to_gdf(place)
-    boundary = gdf.geometry.iloc[0]
-    print("Boundary loaded successfully")
-except:
-    print("Polygon not found. Creating 20 km buffer.")
-    point = Point(lon, lat)
-    boundary = point.buffer(0.2)
-    gdf = gpd.GeoDataFrame(geometry=[boundary], crs="EPSG:4326")
-
-region = ee.Geometry.Polygon(boundary.__geo_interface__['coordinates'])
-
-# NDVI calculation
-def add_ndvi(image):
-    ndvi = image.normalizedDifference(['B8','B4']).rename('NDVI')
-    return image.addBands(ndvi)
-
-def get_ndvi(year):
-    collection = (
-        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-        .filterBounds(region)
-        .filterDate(f"{year}-01-01", f"{year}-12-31")
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20))
-        .map(add_ndvi)
-    )
-    return collection.select("NDVI").median().clip(region)
-
-ndvi_2018 = get_ndvi(2018)
-ndvi_2024 = get_ndvi(2024)
-
-# NDVI change
-ndvi_change = ndvi_2024.subtract(ndvi_2018)
-
-# NDVI statistics
-def ndvi_mean(image):
-    stat = image.reduceRegion(
-        reducer=ee.Reducer.mean(),
-        geometry=region,
-        scale=30,
-        maxPixels=1e13,
-        bestEffort=True
-    )
-    return stat.getInfo()['NDVI']
-
-ndvi18 = ndvi_mean(ndvi_2018)
-ndvi24 = ndvi_mean(ndvi_2024)
-
-print("\nAverage NDVI 2018:", ndvi18)
-print("Average NDVI 2024:", ndvi24)
-
-change_percent = ((ndvi24 - ndvi18) / ndvi18) * 100
-print("Vegetation change:", round(change_percent,2), "%")
-
-# NDVI time-series
-years = list(range(2018,2025))
-ndvi_values = []
-
-for y in years:
-    img = get_ndvi(y)
-    stat = img.reduceRegion(
-        reducer=ee.Reducer.mean(),
-        geometry=region,
-        scale=30,
-        maxPixels=1e13,
-        bestEffort=True
-    )
-    ndvi_values.append(stat.getInfo()['NDVI'])
-
-plt.figure(figsize=(8,5))
-plt.plot(years, ndvi_values, marker='o')
-plt.title("NDVI Trend (2018-2024)")
-plt.xlabel("Year")
-plt.ylabel("Average NDVI")
-plt.grid(True)
-
-clean = place.replace(" ","_")
-trend_file = f"ndvi_trend_{clean}.png"
-plt.savefig(trend_file)
-
-print("NDVI trend graph saved:", trend_file)
-
-# Vegetation classification
-pixel_area = ee.Image.pixelArea()
-
-veg_classes = ndvi_2024.expression(
-"(b('NDVI') < 0.2) ? 1"
-": (b('NDVI') < 0.4) ? 2"
-": (b('NDVI') < 0.6) ? 3"
-": 4"
-).rename("class")
-
-area_image = pixel_area.addBands(veg_classes)
-
-area_stats = area_image.reduceRegion(
-    reducer=ee.Reducer.sum().group(
-        groupField=1,
-        groupName='class'
-    ),
-    geometry=region,
-    scale=30,
-    maxPixels=1e13
-)
-
-print("\nVegetation Area Statistics:")
-print(area_stats.getInfo())
-
-# Visualization parameters
-ndvi_vis = {
-'min':0,
-'max':1,
-'palette':['8b0000','ff0000','ffa500','ffff00','9acd32','006400']
-}
-
-change_vis = {
-'min':-0.5,
-'max':0.5,
-'palette':['red','white','green']
-}
-
-# Create interactive map
-m = folium.Map()
-
-ndvi_layer = ndvi_2024.getMapId(ndvi_vis)
-
-folium.TileLayer(
-    tiles=ndvi_layer['tile_fetcher'].url_format,
-    attr="NDVI",
-    name="NDVI 2024",
-    overlay=True
-).add_to(m)
-
-change_layer = ndvi_change.getMapId(change_vis)
-
-folium.TileLayer(
-    tiles=change_layer['tile_fetcher'].url_format,
-    attr="NDVI Change",
-    name="NDVI Change 2018-2024",
-    overlay=True
-).add_to(m)
-
-geojson = folium.GeoJson(gdf)
-geojson.add_to(m)
-
-m.fit_bounds(geojson.get_bounds())
-folium.LayerControl().add_to(m)
-
-# Map legend
-legend_html = """
-<div style="
-position: fixed;
-bottom: 50px;
-left: 50px;
-width: 230px;
-background-color: white;
-border:2px solid grey;
-z-index:9999;
-font-size:14px;
-padding: 10px;
-">
-<b>NDVI Vegetation Health</b><br><br>
-<i style="background:#8b0000;width:15px;height:15px;float:left;margin-right:8px;"></i>Bare Soil<br>
-<i style="background:#ff0000;width:15px;height:15px;float:left;margin-right:8px;"></i>Very Low Vegetation<br>
-<i style="background:#ffa500;width:15px;height:15px;float:left;margin-right:8px;"></i>Low Vegetation<br>
-<i style="background:#ffff00;width:15px;height:15px;float:left;margin-right:8px;"></i>Moderate Vegetation<br>
-<i style="background:#9acd32;width:15px;height:15px;float:left;margin-right:8px;"></i>Healthy Vegetation<br>
-<i style="background:#006400;width:15px;height:15px;float:left;margin-right:8px;"></i>Dense Vegetation
-<br><br>
-<b>NDVI Change</b><br>
-<i style="background:red;width:15px;height:15px;float:left;margin-right:8px;"></i>Loss<br>
-<i style="background:white;width:15px;height:15px;float:left;margin-right:8px;border:1px solid black;"></i>No Change<br>
-<i style="background:green;width:15px;height:15px;float:left;margin-right:8px;"></i>Gain
-</div>
+Outputs:
+  ndvi_trend_<place>.png      — NDVI time-series chart
+  ndvi_area_<place>.png       — Vegetation class area chart
+  ndvi_seasonal_<place>.png   — Seasonal NDVI chart
+  ndvi_<place>.html           — Interactive Folium map
+  NDVI_report_<place>.txt     — Full analysis report
 """
 
-m.get_root().html.add_child(folium.Element(legend_html))
+import os
+import sys
 
-# Save map
-map_file = f"ndvi_{clean}.html"
+# Allow running from any directory
+sys.path.insert(0, os.path.dirname(__file__))
 
-count = 1
-while os.path.exists(map_file):
-    map_file = f"ndvi_{clean}_{count}.html"
-    count += 1
+from src.ndvi_engine    import (initialize_gee, get_annual_ndvi,
+                                build_time_series, compute_mean_ndvi,
+                                compute_area_stats, get_seasonal_ndvi,
+                                start_geotiff_export)
+from src.location_utils import geocode_place, get_boundary, shapely_to_ee, clean_name
+from src.viz_utils      import (plot_ndvi_trend, plot_area_stats,
+                                plot_seasonal, build_ndvi_map)
+from src.report_utils   import generate_report
 
-m.save(map_file)
-print("\nMap saved:", map_file)
 
-# Export NDVI GeoTIFF
-task = ee.batch.Export.image.toDrive(
-image=ndvi_2024,
-description='NDVI_export',
-folder='NDVI_Exports',
-fileNamePrefix=f"ndvi_{clean}",
-region=region,
-scale=10,
-maxPixels=1e13
-)
+def run(place: str):
+    print(f"\n{'='*50}")
+    print(f"  NDVI Analysis: {place}")
+    print(f"{'='*50}\n")
 
-task.start()
-print("GeoTIFF export started (check Google Drive).")
+    # ── 1. Initialise GEE ────────────────────────────────
+    print("[1/7] Initialising Google Earth Engine...")
+    initialize_gee()
 
-# Auto report
-report_file = f"NDVI_report_{clean}.txt"
+    # ── 2. Geocode + boundary ────────────────────────────
+    print("[2/7] Fetching location boundary...")
+    lat, lon = geocode_place(place)
+    print(f"      Coordinates: {lat:.5f}, {lon:.5f}")
 
-with open(report_file,"w") as f:
-    f.write("NDVI Vegetation Monitoring Report\n")
-    f.write("---------------------------------\n")
-    f.write(f"Location: {place}\n")
-    f.write(f"Coordinates: {lat},{lon}\n\n")
-    f.write(f"NDVI 2018: {ndvi18}\n")
-    f.write(f"NDVI 2024: {ndvi24}\n")
-    f.write(f"\nVegetation Change: {round(change_percent,2)} %\n")
+    gdf, boundary, boundary_source = get_boundary(place)
+    print(f"      Boundary source: {boundary_source}")
 
-    if change_percent > 0:
-        f.write("Vegetation increased\n")
-    else:
-        f.write("Vegetation decreased\n")
-print("Report saved:", report_file)
+    region = shapely_to_ee(boundary)
+    cname  = clean_name(place)
+
+    # ── 3. NDVI images ───────────────────────────────────
+    print("[3/7] Computing NDVI (2018 & 2024)...")
+    ndvi_2018 = get_annual_ndvi(region, 2018)
+    ndvi_2024 = get_annual_ndvi(region, 2024)
+    ndvi_change = ndvi_2024.subtract(ndvi_2018)
+
+    mean_2018 = compute_mean_ndvi(ndvi_2018, region)
+    mean_2024 = compute_mean_ndvi(ndvi_2024, region)
+    change_pct = ((mean_2024 - mean_2018) / mean_2018) * 100 if mean_2018 else 0.0
+
+    print(f"      NDVI 2018: {mean_2018:.4f}")
+    print(f"      NDVI 2024: {mean_2024:.4f}")
+    print(f"      Change   : {change_pct:+.2f}%")
+
+    # ── 4. Time series ───────────────────────────────────
+    print("[4/7] Building time series (2018–2024)...")
+    years = list(range(2018, 2025))
+    valid_years, ndvi_values = build_time_series(region, years)
+
+    trend_path = os.path.join("outputs", f"ndvi_trend_{cname}.png")
+    plot_ndvi_trend(valid_years, ndvi_values, place, trend_path)
+    print(f"      Saved: {trend_path}")
+
+    # ── 5. Area stats + seasonal ─────────────────────────
+    print("[5/7] Computing vegetation area statistics...")
+    area_stats = compute_area_stats(region, ndvi_2024)
+    print(f"      Area stats: {area_stats}")
+
+    area_path = os.path.join("outputs", f"ndvi_area_{cname}.png")
+    plot_area_stats(area_stats, place, area_path)
+    print(f"      Saved: {area_path}")
+
+    print("      Computing seasonal NDVI (2024)...")
+    seasonal_imgs = get_seasonal_ndvi(region, 2024)
+    seasonal_values = {}
+    for season, img in seasonal_imgs.items():
+        if img is not None:
+            val = compute_mean_ndvi(img, region)
+            if val:
+                seasonal_values[season] = val
+
+    if seasonal_values:
+        seasonal_path = os.path.join("outputs", f"ndvi_seasonal_{cname}.png")
+        plot_seasonal(seasonal_values, place, 2024, seasonal_path)
+        print(f"      Saved: {seasonal_path}")
+
+    # ── 6. Interactive map ───────────────────────────────
+    print("[6/7] Building interactive map...")
+    ndvi_map = build_ndvi_map(gdf, ndvi_2018, ndvi_2024, ndvi_change, place)
+
+    map_path = os.path.join("outputs", f"ndvi_{cname}.html")
+    count = 1
+    while os.path.exists(map_path):
+        map_path = os.path.join("outputs", f"ndvi_{cname}_{count}.html")
+        count += 1
+    ndvi_map.save(map_path)
+    print(f"      Saved: {map_path}")
+
+    # ── 7. Report + GeoTIFF export ───────────────────────
+    print("[7/7] Generating report and starting GeoTIFF export...")
+    report_path = os.path.join("outputs", f"NDVI_report_{cname}.txt")
+    generate_report(
+        place=place,
+        lat=lat, lon=lon,
+        ndvi_2018=mean_2018,
+        ndvi_2024=mean_2024,
+        area_stats=area_stats,
+        time_series=(valid_years, ndvi_values),
+        boundary_source=boundary_source,
+        output_path=report_path,
+    )
+    print(f"      Saved: {report_path}")
+
+    task = start_geotiff_export(ndvi_2024, region, cname, year=2024)
+    print(f"      GeoTIFF export started (task: {task.id}). Check Google Drive.")
+
+    print(f"\n{'='*50}")
+    print("  Analysis complete.")
+    print(f"{'='*50}\n")
+
+    # Print machine-readable summary for Streamlit to parse
+    print(f"RESULT::ndvi_2018={mean_2018:.6f}")
+    print(f"RESULT::ndvi_2024={mean_2024:.6f}")
+    print(f"RESULT::change_pct={change_pct:.4f}")
+    print(f"RESULT::trend_path={trend_path}")
+    print(f"RESULT::area_path={area_path}")
+    print(f"RESULT::map_path={map_path}")
+    print(f"RESULT::report_path={report_path}")
+    if seasonal_values:
+        print(f"RESULT::seasonal_path={seasonal_path}")
+
+
+if __name__ == "__main__":
+    place = input("Enter place name: ").strip()
+    if not place:
+        print("No place entered.")
+        sys.exit(1)
+    try:
+        run(place)
+    except Exception as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
