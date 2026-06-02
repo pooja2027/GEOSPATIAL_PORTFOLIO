@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual env
+.venv/
+
+# Cache
+cache/
+
+# Generated outputs — block everything except PNGs
+outputs/*.html
+outputs/*.txt
+outputs/ndvi_seasonal_*.png
+
+# Windows
+desktop.ini
+Thumbs.db
