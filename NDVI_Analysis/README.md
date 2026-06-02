@@ -57,7 +57,7 @@ Enter any city or region name. GeoVista NDVI fetches the boundary from OpenStree
 
 | NDVI Trend (2018–2024) | Vegetation Cover by Class (2024) |
 |---|---|
-| ![Trend](outputs/ndvi_trend_chennai.png) | ![Area](outputs/ndvi_area_chennai.png) |
+| ![Trend](outputs/ndvi_trend_Chennai.png) | ![Area](outputs/ndvi_area_Chennai.png) |
 
 ![NDVI Map](outputs/ndvi_map_chennai.png)
 *Interactive map — NDVI 2024 layer with 2018→2024 change overlay. Red zones indicate vegetation loss.*
