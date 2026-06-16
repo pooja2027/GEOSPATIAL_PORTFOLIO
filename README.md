@@ -1,4 +1,9 @@
-# 🌍 Geospatial Portfolio — Pooja P.
+<div align="center"> 
+  <h1>
+    <b>🌍 Geospatial Portfolio — Pooja P.
+    </b>
+  </h1>
+  </div>
 
 <div align="center">
 
