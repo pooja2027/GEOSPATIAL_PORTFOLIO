@@ -1,4 +1,6 @@
-# 🌊 Tamil Nadu Coastal Risk Dashboard
+<div align="center">
+    <h1> Tamil Nadu Coastal Risk Dashboard🌊</h1>
+</div>
 
 <div align="center">
 
