@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Overview</title>
+<link rel="stylesheet" href="css/style.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Overview</span> — Tamil Nadu Coastal Risk Dashboard</div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">FILTER</span>
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/>
+        <div class="search-drop" id="searchDrop"></div>
+      </div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title">Tamil Nadu <span>Coastal Risk</span> Dashboard</div>
+      <div class="page-sub">Multi-variable vulnerability analysis · 12 coastal districts · 2010–2023</div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid g4" style="margin-bottom:1.2rem">
+      <div class="kpi kpi-cyan"><span class="kpi-val" style="color:#00d4ff" id="kpiDistricts">12</span><span class="kpi-label">COASTAL DISTRICTS</span></div>
+      <div class="kpi kpi-green"><span class="kpi-val" style="color:#7dff8a" id="kpiCoast">1,323</span><span class="kpi-label">KM COASTLINE</span></div>
+      <div class="kpi kpi-orange"><span class="kpi-val" style="color:#ff6b35" id="kpiPop">3,764</span><span class="kpi-label">K POPULATION EXPOSED</span></div>
+      <div class="kpi kpi-red"><span class="kpi-val" style="color:#ff3d00">14</span><span class="kpi-label">YEARS OF DATA</span></div>
+    </div>
+
+    <!-- Map + Findings -->
+    <div class="grid g23" style="margin-bottom:1.2rem">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Choropleth Risk Map</span>
+          <span class="badge b-geo">Geospatial</span>
+          <button class="info-btn" onclick="showInfo('Choropleth Risk Map','Circle size and color encode composite risk score per district. Click any district to filter the entire page. Red = high risk, amber = medium, green = low.')">?</button>
+        </div>
+        <div id="map"></div>
+        <div class="map-legend"><span>Low Risk</span><div class="legend-grad"></div><span>High Risk</span></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Key Findings</span><span class="badge b-spec">Analysis</span></div>
+        <div style="display:flex;flex-direction:column;gap:0.7rem">
+          <div class="finding"><span class="finding-icon">⚠️</span><div><strong>Highest Risk:</strong> Chennai (88) and Nagapattinam (82) — high population density combined with active coastal erosion.</div></div>
+          <div class="finding"><span class="finding-icon">📏</span><div><strong>Coastline ≠ Risk:</strong> Ramanathapuram has 486 km of coastline but only risk score 61, due to lower exposed population and higher wetland cover.</div></div>
+          <div class="finding"><span class="finding-icon">🌊</span><div><strong>2015 — Systemic Event:</strong> Flood counts peaked in every district simultaneously, consistent with the extreme Northeast monsoon anomaly.</div></div>
+          <div class="finding"><span class="finding-icon">🏙️</span><div><strong>Urbanisation Amplifies:</strong> Chennai (72% urban) records highest flood counts. Urban surfaces reduce absorption and increase runoff intensity.</div></div>
+          <div class="finding"><span class="finding-icon">🌿</span><div><strong>Southern Districts Safer:</strong> Tirunelveli (44) and Thanjavur (48) have lower erosion rates, smaller exposed populations, and more forest cover.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- District Risk Gauges -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">District Risk Gauges</span>
+        <span class="badge b-spec">Specialized</span>
+        <button class="info-btn" onclick="showInfo('Risk Gauges','Semi-circular gauge per district showing composite risk score 0–100. Color encodes risk category: green = low (<55), amber = medium (55–75), red = high (>75).')">?</button>
+      </div>
+      <div class="gauge-grid" id="gaugeContainer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Year Panel -->
+<div class="year-panel" id="yearPanel">
+  <div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div>
+  <div class="yp-stats" id="ypStats"></div>
+  <div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events This Year</div><canvas id="ypBar"></canvas></div>
+  <div class="yp-hint">Charts updating live</div>
+</div>
+
+<!-- Info Modal -->
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div>
+    <div class="modal-body" id="infoBody"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/data.js"></script>
+<script>
+buildSidebar('index');
+setupYearPanel();
+
+loadData(()=>{
+  buildMap();
+  buildGauges();
+  setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildGauges();updateKPIs();});
+});
+
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildGauges();updateKPIs();}
+
+function updateKPIs(){
+  const d=getActiveData();
+  document.getElementById('kpiDistricts').textContent=d.length;
+  document.getElementById('kpiCoast').textContent=d.reduce((s,x)=>s+x.coastline_km,0).toLocaleString();
+  document.getElementById('kpiPop').textContent=d.reduce((s,x)=>s+x.population_exposed,0).toLocaleString();
+}
+
+let leafMap=null;
+function buildMap(){
+  if(leafMap) return;
+  leafMap=L.map('map',{zoomControl:true,scrollWheelZoom:false}).setView([10.5,79.5],6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'©CartoDB',subdomains:'abcd'}).addTo(leafMap);
+  DATA.forEach(d=>{
+    const c=riskColor(d.risk_score), r=10+(d.risk_score/100)*20;
+    const ci=L.circleMarker([d.lat,d.lng],{radius:r,fillColor:c,color:c,weight:2,opacity:0.9,fillOpacity:0.5}).addTo(leafMap);
+    ci.bindPopup(`<div style="font-family:'DM Mono',monospace;font-size:11px;background:#0c1526;color:#e4edfb;border:1px solid ${c};border-radius:6px;padding:10px;min-width:170px"><b style="color:${c};font-size:13px">${d.name}</b><br/><hr style="border-color:#1a2d47;margin:5px 0"/>Risk: <b style="color:${c}">${d.risk_score}/100</b><br/>Coastline: <b>${d.coastline_km}km</b><br/>Population: <b>${d.population_exposed}K</b><br/>Erosion: <b>${d.erosion_rate}m/yr</b><br/><a href="spatial.html" style="display:block;margin-top:6px;padding:4px;background:${c}22;border:1px solid ${c};color:${c};border-radius:4px;cursor:pointer;font-family:'DM Mono';font-size:10px;text-align:center;text-decoration:none">View Spatial Page →</a></div>`);
+    if(d.risk_score>=75) L.circleMarker([d.lat,d.lng],{radius:r+7,fillColor:'transparent',color:c,weight:1,opacity:0.25,fillOpacity:0}).addTo(leafMap);
+  });
+}
+
+function buildGauges(){
+  const container=document.getElementById('gaugeContainer'); container.innerHTML='';
+  getActiveData().forEach((d,i)=>{
+    const div=document.createElement('div'); div.className='gauge-item';
+    div.innerHTML=`<canvas id="g${i}"></canvas><span class="gauge-val" style="color:${riskColor(d.risk_score)}">${d.risk_score}</span><div class="gauge-lbl">${d.name.toUpperCase().substring(0,9)}</div>`;
+    container.appendChild(div);
+    setTimeout(()=>makeChart(`g${i}`,{type:'doughnut',data:{datasets:[{data:[d.risk_score,100-d.risk_score],backgroundColor:[riskColor(d.risk_score),'#1a2d47'],borderWidth:0,circumference:180,rotation:-90}]},options:{responsive:true,cutout:'72%',animation:{duration:900,easing:'easeOutQuart'},plugins:{legend:{display:false},tooltip:{enabled:false}}}}),10);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Relationships</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Relationships</span> — Correlation Analysis</div>
+    <div class="ctrl-group"><span class="ctrl-label">YEAR</span>
+      <input type="range" class="year-slider" id="yearSlider" min="2010" max="2023" value="2023"/>
+      <span class="year-val" id="yearVal">All</span>
+      <button class="ctrl-btn active" id="btnAllYears">All Years</button>
+    </div>
+    <div class="ctrl-group"><span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <button class="ctrl-btn" onclick="downloadCSV()">⬇ CSV</button>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Relationships</span> — Correlation & Patterns</div>
+      <div class="page-sub">Scatter, Bubble, Heatmap — examining variable relationships</div>
+    </div>
+    <div class="grid g2" style="margin-bottom:1.2rem">
+      <div class="card"><div class="card-header"><span class="card-title">Scatter — Rainfall vs Flood Events</span><span class="badge b-rel">Relationship</span><button class="info-btn" onclick="showInfo('Scatter Plot','Tests whether higher rainfall correlates with more flood events. Moderate positive relationship visible. 2015 cluster of high-rainfall high-flood points appears as an outlier group — extreme rainfall causes disproportionate flooding.')">?</button><button class="export-btn" onclick="exportChartPNG('scatterChart','scatter')">⬇ PNG</button></div><canvas id="scatterChart" style="max-height:340px"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Bubble — Pop × Coastline × Risk</span><span class="badge b-rel">Relationship</span><button class="info-btn" onclick="showInfo('Bubble Chart','Encodes 3 variables: coastline (x), population (y), risk score (bubble size). Reveals that high population at short coastlines produces same or higher risk than long coastlines with low population. Risk is exposure-driven, not extent-driven.')">?</button><button class="export-btn" onclick="exportChartPNG('bubbleChart','bubble')">⬇ PNG</button></div><canvas id="bubbleChart" style="max-height:340px"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Heatmap Table — Flood Events by District × Year</span><span class="badge b-rel">Relationship</span><button class="info-btn" onclick="showInfo('Heatmap Table','Color-encodes flood event counts across district × year matrix. The 2015 column glows red across nearly every row — confirming a systemic regional event. Allows simultaneous pattern recognition across both time and geography.')">?</button><button class="export-btn" onclick="downloadCSV()">⬇ CSV</button></div>
+      <div class="heatmap-scroll" id="heatmapContainer"></div>
+    </div>
+  </div>
+</div>
+<div class="year-panel" id="yearPanel"><div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div><div class="yp-stats" id="ypStats"></div><div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events</div><canvas id="ypBar"></canvas></div><div class="yp-hint">Charts updating live</div></div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>
+buildSidebar('relationships'); setupYearPanel();
+loadData(()=>{ setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildAll();}); setupYearSlider(buildAll); buildAll(); });
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildAll();}
+function buildAll(){ buildScatter(); buildBubble(); buildHeatmap(); }
+function buildScatter(){
+  const d=getActiveData(), yr=selectedYear;
+  const datasets=d.map(dist=>{
+    const yrs=yr?[String(yr)]:Object.keys(dist.yearly_floods||{});
+    return{label:dist.name,data:yrs.filter(y=>dist.yearly_floods?.[y]!==undefined).map(y=>({x:dist.rainfall_mm?.[y]||0,y:dist.yearly_floods?.[y]||0})),backgroundColor:dist._color+'99',borderColor:dist._color,borderWidth:1.5,pointRadius:yr?8:5,pointHoverRadius:10};
+  }).filter(ds=>ds.data.length>0);
+  makeChart('scatterChart',{type:'scatter',data:{datasets},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:true,position:'bottom',labels:{color:'#5a7a9e',font:{family:'DM Mono',size:9},boxWidth:10,padding:8,usePointStyle:true}},tooltip:{...chartDefaults().plugins.tooltip,callbacks:{label:ctx=>`${ctx.dataset.label}: Rain ${ctx.raw.x}mm, Floods ${ctx.raw.y}`}}},scales:{x:{...chartDefaults().scales.x,title:{display:true,text:'Rainfall (mm)',color:'#5a7a9e',font:{family:'DM Mono',size:9}}},y:{...chartDefaults().scales.y,title:{display:true,text:'Flood Events',color:'#5a7a9e',font:{family:'DM Mono',size:9}}}}}});
+}
+function buildBubble(){
+  const d=getActiveData();
+  makeChart('bubbleChart',{type:'bubble',data:{datasets:d.map(x=>({label:x.name,data:[{x:x.coastline_km,y:x.population_exposed,r:Math.max(5,x.risk_score/8)}],backgroundColor:x._color+'88',borderColor:x._color,borderWidth:1}))},options:{...chartDefaults(),scales:{x:{...chartDefaults().scales.x,title:{display:true,text:'Coastline (km)',color:'#5a7a9e',font:{family:'DM Mono',size:9}}},y:{...chartDefaults().scales.y,title:{display:true,text:'Population Exposed (K)',color:'#5a7a9e',font:{family:'DM Mono',size:9}}}}}});
+}
+function buildHeatmap(){
+  const d=getActiveData(), yrs=Object.keys(DATA[0].yearly_floods);
+  const mx=Math.max(...DATA.flatMap(x=>Object.values(x.yearly_floods||{})));
+  let html='<table class="hm-table"><thead><tr><th>District</th>';
+  yrs.forEach(y=>html+=`<th style="${selectedYear&&parseInt(y)===selectedYear?'color:#00d4ff;border-bottom:2px solid #00d4ff':''}">${y}</th>`);
+  html+='</tr></thead><tbody>';
+  d.forEach(x=>{
+    html+=`<tr><td style="color:${x._color}">${x.name}</td>`;
+    yrs.forEach(y=>{const v=x.yearly_floods?.[y]||0,i=v/mx,act=selectedYear&&parseInt(y)===selectedYear;html+=`<td style="background:rgba(${Math.round(255*i)},${Math.round(80*(1-i))},${Math.round(50*(1-i))},${0.3+i*0.6});color:${i>0.6?'#fff':'#aaa'};${act?'outline:2px solid #00d4ff;outline-offset:-2px;font-weight:700':''}">${v}</td>`;});
+    html+='</tr>';
+  });
+  document.getElementById('heatmapContainer').innerHTML=html+'</tbody></table>';
+}
+</script></body></html>

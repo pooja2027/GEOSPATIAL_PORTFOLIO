@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Multivariate</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Multivariate</span> — Multi-factor Analysis</div>
+    <div class="ctrl-group"><span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <div class="ctrl-group"><span class="ctrl-label">COMPARE</span>
+      <select class="ctrl-select" id="compareA"><option value="">District A</option></select>
+      <select class="ctrl-select" id="compareB"><option value="">District B</option></select>
+      <button class="ctrl-btn" id="btnClearCompare" style="display:none">✕</button>
+    </div>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Multivariate</span> — Radar & Parallel Coordinates</div>
+      <div class="page-sub">Radar chart · 3D drag-rotate parallel coordinates with force drag simulation</div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Radar — Multi-factor Profile</span><span class="badge b-multi">Multivariate</span>
+          <select class="ctrl-select" id="radarSel" onchange="buildRadar()" style="font-size:0.68rem"></select>
+          <button class="info-btn" onclick="showInfo('Radar Chart','Displays four normalized risk factors for a selected district as a polygon. Larger polygon area = higher overall vulnerability. Chennai fills the radar almost completely — confirming it is the most comprehensively vulnerable district.')">?</button>
+          <button class="export-btn" onclick="exportChartPNG('radarChart','radar')">⬇ PNG</button>
+        </div>
+        <canvas id="radarChart"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Parallel Coordinates — 3D Force Drag</span>
+          <span class="badge b-multi">Multivariate</span>
+          <button class="info-btn" onclick="showInfo('Parallel Coordinates 3D','All four risk variables plotted simultaneously. Drag any axis point — the entire set of points on that axis moves together with it, deforming all connected lines. On release, everything springs back to real positions using physics. Rotate by dragging empty space.')">?</button>
+          <span class="drag-hint">Drag axis to deform · Drag space to rotate</span>
+        </div>
+        <canvas id="parallelCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="year-panel" id="yearPanel"><div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div><div class="yp-stats" id="ypStats"></div><div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events</div><canvas id="ypBar"></canvas></div><div class="yp-hint">Charts updating live</div></div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>
+buildSidebar('multivariate'); setupYearPanel();
+loadData(()=>{
+  const sel=document.getElementById('radarSel');
+  DATA.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.name;sel.appendChild(o);});
+  setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildRadar();buildParallel();});
+  setupCompare(()=>{buildRadar();buildParallel();});
+  buildRadar(); buildParallel();
+});
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildRadar();buildParallel();}
+
+function buildRadar(){
+  const id=document.getElementById('radarSel')?.value||DATA[0]?.id;
+  const x=DATA.find(d=>d.id===id); if(!x) return;
+  const norm=(v,ax)=>{const vals=DATA.map(d=>d[ax]);const mn=Math.min(...vals),mx=Math.max(...vals);return mx===mn?50:((v-mn)/(mx-mn))*100;};
+  makeChart('radarChart',{type:'radar',data:{labels:['Risk Score','Coastline','Population','Erosion Rate'],datasets:[{label:x.name,data:['risk_score','coastline_km','population_exposed','erosion_rate'].map(a=>norm(x[a],a)),backgroundColor:x._color+'33',borderColor:x._color,borderWidth:2,pointBackgroundColor:x._color,pointRadius:4}]},options:{responsive:true,animation:{duration:800},plugins:{legend:{labels:{color:'#5a7a9e',font:{family:'DM Mono',size:10}}}},scales:{r:{min:0,max:100,ticks:{color:'#5a7a9e',font:{family:'DM Mono',size:8},backdropColor:'transparent'},grid:{color:'#1a2d47'},pointLabels:{color:'#5a7a9e',font:{family:'DM Mono',size:9}}}}}});
+}
+
+// ===== 3D PARALLEL WITH FORCE DRAG (WHOLE AXIS MOVES) =====
+function buildParallel(){
+  const canvas=document.getElementById('parallelCanvas'); if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const AXES=['risk_score','coastline_km','population_exposed','erosion_rate'];
+  const LABELS=['Risk','Coastline','Population','Erosion'];
+  let rotX=0.22, rotY=0.38, isDragging=false, lastX=0, lastY=0, autoRotate=true;
+
+  // Force drag state — per axis offset + spring physics
+  let axisOffsets=AXES.map(()=>({dy:0,vy:0})); // dy=current offset, vy=velocity
+  let dragAxis=null; // index of axis being dragged
+
+  const norm=(v,ax)=>{const vals=DATA.map(d=>d[ax]);const mn=Math.min(...vals),mx=Math.max(...vals);return mx===mn?0.5:(v-mn)/(mx-mn);};
+
+  function project(x,y,z){
+    const cosX=Math.cos(rotX),sinX=Math.sin(rotX),cosY=Math.cos(rotY),sinY=Math.sin(rotY);
+    const y1=y*cosX-z*sinX,z1=y*sinX+z*cosX,x1=x*cosY+z1*sinY,z2=-x*sinY+z1*cosY;
+    const sc=600/(600+z2*80);
+    return{px:canvas.width/2+x1*sc*canvas.width*0.38,py:canvas.height/2+y1*sc*canvas.height*0.38,sc};
+  }
+
+  function draw(){
+    canvas.width=canvas.offsetWidth||600; canvas.height=340;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const d=getActiveData(), n=AXES.length;
+
+    AXES.forEach((ax,i)=>{
+      const xp=(i/(n-1))*2-1;
+      const dy=axisOffsets[i].dy*0.007;
+      const top=project(xp,-0.85+dy,0), bot=project(xp,0.85+dy,0);
+      // Axis line
+      ctx.beginPath(); ctx.moveTo(top.px,top.py); ctx.lineTo(bot.px,bot.py);
+      ctx.strokeStyle=dragAxis===i?'rgba(0,212,255,0.8)':'#2a3f5f';
+      ctx.lineWidth=dragAxis===i?3:2; ctx.stroke();
+      // Label
+      ctx.fillStyle=dragAxis===i?'#00d4ff':'#8aa5c8';
+      ctx.font=`bold ${dragAxis===i?12:11}px DM Mono,monospace`; ctx.textAlign='center';
+      ctx.fillText(LABELS[i],top.px,top.py-14);
+      // Ticks
+      for(let t=0;t<=4;t++){
+        const pt=project(xp,-0.85+dy+(t/4)*1.7,0);
+        ctx.beginPath(); ctx.arc(pt.px,pt.py,3,0,Math.PI*2);
+        ctx.fillStyle='#2a3f5f'; ctx.fill();
+      }
+    });
+
+    // Data lines — all points on a dragged axis shift together
+    d.forEach(dist=>{
+      const isFaded=(compareA&&compareB&&dist.id!==compareA&&dist.id!==compareB)||(selectedDistrict&&dist.id!==selectedDistrict);
+      const pts=AXES.map((ax,i)=>{
+        const xp=(i/(n-1))*2-1;
+        const base=-0.85+norm(dist[ax],ax)*1.7;
+        const dy=axisOffsets[i].dy*0.007;
+        return project(xp,base+dy,0);
+      });
+      ctx.beginPath();
+      pts.forEach((pt,i)=>i===0?ctx.moveTo(pt.px,pt.py):ctx.lineTo(pt.px,pt.py));
+      ctx.strokeStyle=dist._color+(isFaded?'22':'cc');
+      ctx.lineWidth=isFaded?0.8:2.5; ctx.stroke();
+      pts.forEach(pt=>{
+        ctx.beginPath(); ctx.arc(pt.px,pt.py,isFaded?2:4.5*pt.sc,0,Math.PI*2);
+        ctx.fillStyle=isFaded?dist._color+'25':dist._color; ctx.fill();
+      });
+    });
+
+    // Legend
+    ctx.font='9px DM Mono,monospace'; ctx.textAlign='left';
+    d.slice(0,8).forEach((dist,i)=>{ctx.fillStyle=dist._color;ctx.fillRect(10,10+i*14,9,7);ctx.fillStyle='#5a7a9e';ctx.fillText(dist.name.substring(0,9),22,17+i*14);});
+  }
+
+  // Find which axis is closest to mouse x
+  function findAxis(mx){
+    const n=AXES.length;
+    let best=null, bestDist=40;
+    AXES.forEach((_,i)=>{
+      const xp=(i/(n-1))*2-1;
+      const pt=project(xp,0,0);
+      const d=Math.abs(pt.px-mx);
+      if(d<bestDist){bestDist=d;best=i;}
+    });
+    return best;
+  }
+
+  // Physics spring-back loop
+  function physics(){
+    let dirty=false;
+    axisOffsets.forEach((o,i)=>{
+      if(dragAxis===i) return;
+      if(Math.abs(o.dy)<0.3&&Math.abs(o.vy)<0.2){o.dy=0;o.vy=0;return;}
+      o.vy=o.vy*0.72-o.dy*0.20;
+      o.dy+=o.vy;
+      dirty=true;
+    });
+    if(dirty) draw();
+    requestAnimationFrame(physics);
+  }
+
+  canvas.addEventListener('mousedown',e=>{
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.clientX-rect.left;
+    const ax=findAxis(mx);
+    if(ax!==null){dragAxis=ax;autoRotate=false;}
+    else{isDragging=true;autoRotate=false;}
+    lastX=e.clientX; lastY=e.clientY;
+  });
+
+  window.addEventListener('mousemove',e=>{
+    if(dragAxis!==null){
+      const dy=e.clientY-lastY;
+      axisOffsets[dragAxis].dy+=dy*2.5; // whole axis shifts
+      axisOffsets[dragAxis].vy=0;
+      lastX=e.clientX; lastY=e.clientY;
+      draw();
+    } else if(isDragging){
+      rotY+=(e.clientX-lastX)*0.012; rotX+=(e.clientY-lastY)*0.012;
+      lastX=e.clientX; lastY=e.clientY; draw();
+    }
+  });
+
+  window.addEventListener('mouseup',()=>{
+    dragAxis=null; isDragging=false;
+  });
+
+  canvas.addEventListener('touchstart',e=>{
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.touches[0].clientX-rect.left;
+    const ax=findAxis(mx);
+    if(ax!==null){dragAxis=ax;autoRotate=false;}
+    else{isDragging=true;autoRotate=false;}
+    lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+    e.preventDefault();
+  },{passive:false});
+
+  canvas.addEventListener('touchmove',e=>{
+    if(dragAxis!==null){axisOffsets[dragAxis].dy+=(e.touches[0].clientY-lastY)*2.5;draw();}
+    else if(isDragging){rotY+=(e.touches[0].clientX-lastX)*0.012;rotX+=(e.touches[0].clientY-lastY)*0.012;draw();}
+    lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+    e.preventDefault();
+  },{passive:false});
+
+  canvas.addEventListener('touchend',()=>{dragAxis=null;isDragging=false;});
+
+  (function rotLoop(){if(autoRotate){rotY+=0.004;draw();}requestAnimationFrame(rotLoop);})();
+  physics();
+  draw();
+}
+</script></body></html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Spatial</title>
+<link rel="stylesheet" href="css/style.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Spatial Risk</span> — Map Analysis</div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">MAP LAYER</span>
+      <select class="ctrl-select" id="layerSelect" onchange="changeLayer()">
+        <option value="risk">Risk Score</option>
+        <option value="erosion">Erosion Rate</option>
+        <option value="population">Population</option>
+        <option value="coastline">Coastline Length</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Spatial</span> Risk Analysis</div>
+      <div class="page-sub">Geographic distribution of coastal vulnerability · Click district for details</div>
+    </div>
+
+    <div class="grid g4" style="margin-bottom:1.2rem">
+      <div class="kpi kpi-red"><span class="kpi-val" style="color:#ff3d00">2</span><span class="kpi-label">HIGH RISK DISTRICTS</span></div>
+      <div class="kpi kpi-orange"><span class="kpi-val" style="color:#ffab00">8</span><span class="kpi-label">MEDIUM RISK DISTRICTS</span></div>
+      <div class="kpi kpi-green"><span class="kpi-val" style="color:#7dff8a">2</span><span class="kpi-label">LOW RISK DISTRICTS</span></div>
+      <div class="kpi kpi-cyan"><span class="kpi-val" style="color:#00d4ff" id="kpiAvgRisk">—</span><span class="kpi-label">AVERAGE RISK SCORE</span></div>
+    </div>
+
+    <div class="grid g2">
+
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-header">
+          <span class="card-title">Interactive Risk Map</span>
+          <span class="badge b-geo">Geospatial</span>
+          <button class="info-btn"
+          onclick="showInfo(
+            'Spatial Risk Map',
+            'Proportional symbol map where circle size and color encode the selected variable. Switch layers to explore different coastal risk dimensions spatially.'
+          )">?</button>
+        </div>
+        <div id="map" style="height:460px;border-radius:8px;border:1px solid #1a2d47"></div>
+        <div class="map-legend"><span>Low</span><div class="legend-grad"></div><span>High</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Risk Score by District</span>
+          <span class="badge b-comp">Comparison</span>
+
+          <button class="info-btn"
+          onclick="showInfo(
+            'Risk Score by District',
+            'Bar chart ranking districts by overall risk score. X-axis shows districts and Y-axis shows risk score (0–100). Used to compare vulnerability levels across coastal districts.'
+          )">?</button>
+
+          <button class="export-btn" onclick="exportChartPNG('spatialBar','risk_by_district')">⬇ PNG</button>
+        </div>
+        <canvas id="spatialBar"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Coastal Length vs Risk</span>
+          <span class="badge b-rel">Relationship</span>
+
+          <button class="info-btn"
+          onclick="showInfo(
+            'Coastal Length vs Risk',
+            'Scatter plot showing relationship between coastline length and risk score. Each point represents a district. Used to identify correlation between exposure length and vulnerability.'
+          )">?</button>
+
+          <button class="export-btn" onclick="exportChartPNG('coastRisk','coastline_vs_risk')">⬇ PNG</button>
+        </div>
+        <canvas id="coastRisk"></canvas>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="year-panel" id="yearPanel">
+<div class="yp-head">
+<span class="yp-yr" id="ypYear">—</span>
+<span class="yp-lbl">YEAR SNAPSHOT</span>
+<button class="yp-close" id="ypClose">✕</button>
+</div>
+<div class="yp-stats" id="ypStats"></div>
+<div class="yp-chart-wrap">
+<div class="yp-chart-title">Flood Events</div>
+<canvas id="ypBar"></canvas>
+</div>
+<div class="yp-hint">Charts updating live</div>
+</div>
+
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()">
+<div class="modal-box" onclick="event.stopPropagation()">
+<div class="modal-head">
+<h3 id="infoTitle"></h3>
+<button class="modal-close" onclick="closeInfo()">✕</button>
+</div>
+<div class="modal-body" id="infoBody"></div>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/data.js"></script>
+
+<script>
+buildSidebar('spatial'); setupYearPanel();
+let leafMap=null, markers=[];
+
+loadData(()=>{
+  const avg=Math.round(DATA.reduce((s,d)=>s+d.risk_score,0)/DATA.length);
+  document.getElementById('kpiAvgRisk').textContent=avg;
+  buildMap(); buildCharts();
+  setupDistrictSearch(id=>{
+    selectedDistrict=id;
+    activeDistricts=new Set([id]);
+    document.getElementById('btnClearFilter').style.display='inline-block';
+    buildCharts();
+  });
+});
+
+function clearFilter(){
+  selectedDistrict=null;
+  activeDistricts=new Set(DATA.map(d=>d.id));
+  document.getElementById('btnClearFilter').style.display='none';
+  document.getElementById('districtSearch').value='';
+  buildCharts();
+}
+
+function buildMap(){
+  if(leafMap) return;
+  leafMap=L.map('map',{zoomControl:true,scrollWheelZoom:false}).setView([10.5,79.5],6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'©CartoDB',subdomains:'abcd'}).addTo(leafMap);
+
+  DATA.forEach(d=>{
+    const c=riskColor(d.risk_score), r=10+(d.risk_score/100)*22;
+    const ci=L.circleMarker([d.lat,d.lng],{
+      radius:r,fillColor:c,color:c,weight:2,opacity:0.9,fillOpacity:0.5
+    }).addTo(leafMap);
+
+    markers.push({d,ci});
+
+    ci.bindPopup(`<div style="font-family:'DM Mono',monospace;font-size:11px;background:#0c1526;color:#e4edfb;border:1px solid ${c};border-radius:6px;padding:10px;min-width:180px">
+    <b style="color:${c};font-size:13px">${d.name}</b>
+    <hr style="border-color:#1a2d47;margin:5px 0"/>
+    Risk Score: <b style="color:${c}">${d.risk_score}/100</b><br/>
+    Coastline: <b>${d.coastline_km} km</b><br/>
+    Population Exposed: <b>${d.population_exposed}K</b><br/>
+    Erosion Rate: <b>${d.erosion_rate} m/yr</b><br/>
+    Risk Level: <b style="color:${c}">${riskLabel(d.risk_score)}</b>
+    </div>`);
+
+    if(d.risk_score>=75)
+      L.circleMarker([d.lat,d.lng],{
+        radius:r+8,fillColor:'transparent',color:c,weight:1,opacity:0.25
+      }).addTo(leafMap);
+  });
+}
+
+function changeLayer(){
+  const layer=document.getElementById('layerSelect').value;
+  const vals=DATA.map(d=>d[layer==='risk'?'risk_score':layer==='erosion'?'erosion_rate':layer==='population'?'population_exposed':'coastline_km']);
+  const mn=Math.min(...vals), mx=Math.max(...vals);
+
+  markers.forEach(({d,ci})=>{
+    const v=d[layer==='risk'?'risk_score':layer==='erosion'?'erosion_rate':layer==='population'?'population_exposed':'coastline_km'];
+    const t=(v-mn)/(mx-mn);
+    const r=8+t*26;
+    const c=t>0.65?'#ff3d00':t>0.35?'#ffab00':'#00c853';
+    ci.setRadius(r);
+    ci.setStyle({fillColor:c,color:c});
+  });
+}
+
+function buildCharts(){
+  const d=[...getActiveData()].sort((a,b)=>b.risk_score-a.risk_score);
+
+  makeChart('spatialBar',{
+    type:'bar',
+    data:{
+      labels:d.map(x=>x.name.substring(0,6)),
+      datasets:[{
+        data:d.map(x=>x.risk_score),
+        backgroundColor:d.map(x=>riskColor(x.risk_score)+'cc'),
+        borderColor:d.map(x=>riskColor(x.risk_score)),
+        borderWidth:1,
+        borderRadius:4
+      }]
+    },
+    options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false}}}
+  });
+
+  makeChart('coastRisk',{
+    type:'scatter',
+    data:{
+      datasets:[{
+        label:'Districts',
+        data:d.map(x=>({x:x.coastline_km,y:x.risk_score})),
+        backgroundColor:d.map(x=>riskColor(x.risk_score)+'bb'),
+        borderColor:d.map(x=>riskColor(x.risk_score)),
+        pointRadius:9,
+        pointHoverRadius:12
+      }]
+    },
+    options:{
+      ...chartDefaults(),
+      plugins:{
+        ...chartDefaults().plugins,
+        legend:{display:false},
+        tooltip:{
+          ...chartDefaults().plugins.tooltip,
+          callbacks:{
+            label:ctx=>`${d[ctx.dataIndex].name}: ${ctx.raw.x}km coast, Risk ${ctx.raw.y}`
+          }
+        }
+      },
+      scales:{
+        x:{...chartDefaults().scales.x,title:{display:true,text:'Coastline (km)'}},
+        y:{...chartDefaults().scales.y,title:{display:true,text:'Risk Score'}}
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>

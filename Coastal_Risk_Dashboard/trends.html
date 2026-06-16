@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Trends</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Trends</span> — Time Series Analysis</div>
+    <div class="ctrl-group"><span class="ctrl-label">YEAR</span>
+      <input type="range" class="year-slider" id="yearSlider" min="2010" max="2023" value="2023"/>
+      <span class="year-val" id="yearVal">All</span>
+      <button class="ctrl-btn active" id="btnAllYears">All Years</button>
+    </div>
+    <div class="ctrl-group"><span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <button class="ctrl-btn" onclick="downloadCSV()">⬇ CSV</button>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Trends</span> — Temporal Patterns</div>
+      <div class="page-sub">Multi-line, Area, Calendar Heatmap · 2010–2023</div>
+    </div>
+    <div class="card" style="margin-bottom:1.2rem">
+      <div class="card-header"><span class="card-title">Multi-line — Yearly Rainfall Trend (mm)</span><span class="badge b-trend">Trend</span><button class="info-btn" onclick="showInfo('Multi-line Rainfall','Tracks annual rainfall for all coastal districts 2010–2023. The 2015 spike is visible across all lines — confirming a region-wide event. Toggle districts using the buttons below.')">?</button><button class="export-btn" onclick="exportChartPNG('multiLine','rainfall_trend')">⬇ PNG</button></div>
+      <div class="toggle-row" id="districtToggle"></div>
+      <canvas id="multiLine" style="max-height:260px"></canvas>
+    </div>
+    <div class="grid g2" style="margin-bottom:1.2rem">
+      <div class="card"><div class="card-header"><span class="card-title">Area Chart — Total Flood Events/Year</span><span class="badge b-trend">Trend</span><button class="info-btn" onclick="showInfo('Area Chart','Aggregates total flood events across all selected districts per year. Filled area emphasizes cumulative coastal burden. 2015 peak is dramatically visible at 70 total events.')">?</button><button class="export-btn" onclick="exportChartPNG('areaChart','flood_events_trend')">⬇ PNG</button></div><canvas id="areaChart"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Step Chart — Flood Events (Stepped)</span><span class="badge b-trend">Trend</span><button class="info-btn" onclick="showInfo('Step Chart','Stepped line chart emphasizes the discrete yearly nature of flood event counts. Each step represents a change from one year to the next, making sudden jumps more visually apparent than a smooth line.')">?</button><button class="export-btn" onclick="exportChartPNG('stepChart','flood_step')">⬇ PNG</button></div><canvas id="stepChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Calendar Heatmap — Flood Intensity by Year</span><span class="badge b-spec">Specialized</span>
+        <select class="ctrl-select" id="calSelect" onchange="buildCalendar()" style="margin-left:auto;font-size:0.68rem"></select>
+        <button class="info-btn" onclick="showInfo('Calendar Heatmap','Color-coded blocks per year show flood event intensity for the selected district. Green = low, red = high. 2015 stands out in red across nearly every district.')">?</button>
+      </div>
+      <div id="calContainer"></div>
+    </div>
+  </div>
+</div>
+<div class="year-panel" id="yearPanel"><div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div><div class="yp-stats" id="ypStats"></div><div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events</div><canvas id="ypBar"></canvas></div><div class="yp-hint">Charts updating live</div></div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>
+buildSidebar('trends'); setupYearPanel();
+loadData(()=>{
+  setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildAll();});
+  setupYearSlider(buildAll);
+  buildToggle(); buildAll();
+  const sel=document.getElementById('calSelect');
+  DATA.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.name;sel.appendChild(o);});
+  buildCalendar();
+});
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildAll();}
+function buildAll(){ buildMultiLine(); buildArea(); buildStep(); buildCalendar(); }
+function buildToggle(){
+  const c=document.getElementById('districtToggle'); c.innerHTML='';
+  DATA.forEach(d=>{
+    const b=document.createElement('button'); b.className='tgl-btn active';
+    b.textContent=d.name.substring(0,5); b.style.cssText=`border-color:${d._color};background:${d._color}33;color:${d._color}`;
+    b.addEventListener('click',()=>{
+      if(activeDistricts.has(d.id)){activeDistricts.delete(d.id);b.classList.remove('active');b.style.background='transparent';b.style.color='#5a7a9e';}
+      else{activeDistricts.add(d.id);b.classList.add('active');b.style.background=d._color+'33';b.style.color=d._color;}
+      buildMultiLine();
+    });
+    c.appendChild(b);
+  });
+}
+function buildMultiLine(){
+  const yrs=Object.keys(DATA[0].rainfall_mm);
+  const active=getActiveData().filter(d=>activeDistricts.has(d.id));
+  const yi=selectedYear?yrs.indexOf(String(selectedYear)):-1;
+  makeChart('multiLine',{type:'line',data:{labels:yrs,datasets:active.map(d=>({label:d.name,data:yrs.map(y=>d.rainfall_mm?.[y]||0),borderColor:d._color,backgroundColor:d._color+'11',borderWidth:2,pointRadius:yrs.map((_,i)=>i===yi?9:3),pointBackgroundColor:yrs.map((_,i)=>i===yi?'#fff':d._color),pointHoverRadius:6,fill:false,tension:0.3}))},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{labels:{color:'#5a7a9e',font:{family:'DM Mono',size:9},boxWidth:10,padding:8}}}}});
+}
+function buildArea(){
+  const d=getActiveData(), yrs=Object.keys(DATA[0].yearly_floods);
+  const totals=yrs.map(y=>d.reduce((s,x)=>s+(x.yearly_floods?.[y]||0),0));
+  const yi=selectedYear?yrs.indexOf(String(selectedYear)):-1;
+  makeChart('areaChart',{type:'line',data:{labels:yrs,datasets:[{label:'Total Flood Events',data:totals,borderColor:'#7dff8a',backgroundColor:'rgba(125,255,138,0.12)',fill:true,tension:0.4,borderWidth:2,pointRadius:yrs.map((_,i)=>i===yi?10:4),pointBackgroundColor:yrs.map((_,i)=>i===yi?'#fff':'#7dff8a')}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false}}}});
+}
+function buildStep(){
+  const d=getActiveData(), yrs=Object.keys(DATA[0].yearly_floods);
+  const totals=yrs.map(y=>d.reduce((s,x)=>s+(x.yearly_floods?.[y]||0),0));
+  makeChart('stepChart',{type:'line',data:{labels:yrs,datasets:[{label:'Flood Events (Stepped)',data:totals,borderColor:'#be78ff',backgroundColor:'rgba(190,120,255,0.1)',fill:true,stepped:true,borderWidth:2,pointRadius:4,pointBackgroundColor:'#be78ff'}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false}}}});
+}
+function buildCalendar(){
+  const id=document.getElementById('calSelect')?.value||DATA[0]?.id;
+  const dist=DATA.find(x=>x.id===id); if(!dist) return;
+  const yrs=Object.keys(dist.yearly_floods), vals=yrs.map(y=>dist.yearly_floods[y]);
+  const mx=Math.max(...vals), mn=Math.min(...vals);
+  const total=vals.reduce((s,v)=>s+v,0), peakYr=yrs[vals.indexOf(mx)];
+  const gc=v=>{const t=(v-mn)/(mx-mn)||0;if(t<0.25)return{bg:`rgba(0,140,40,${0.35+t*0.8})`,tx:'#00ff6a'};if(t<0.5)return{bg:`rgba(200,140,0,${0.4+t*0.6})`,tx:'#ffd700'};if(t<0.75)return{bg:`rgba(230,90,0,${0.45+t*0.5})`,tx:'#ff8c42'};return{bg:`rgba(255,30,0,${0.55+t*0.45})`,tx:'#fff'};};
+  let html=`<div style="display:flex;gap:1.5rem;margin-bottom:1rem;flex-wrap:wrap">
+    <div class="kpi" style="flex:1;min-width:100px;padding:0.6rem 0.8rem"><span class="kpi-val" style="color:${dist._color};font-size:1.2rem">${total}</span><span class="kpi-label">TOTAL EVENTS</span></div>
+    <div class="kpi" style="flex:1;min-width:100px;padding:0.6rem 0.8rem"><span class="kpi-val" style="color:#ff3d00;font-size:1.2rem">${mx}</span><span class="kpi-label">PEAK COUNT</span></div>
+    <div class="kpi" style="flex:1;min-width:100px;padding:0.6rem 0.8rem"><span class="kpi-val" style="color:#ffab00;font-size:1.2rem">${peakYr}</span><span class="kpi-label">PEAK YEAR</span></div>
+    <div class="kpi" style="flex:1;min-width:100px;padding:0.6rem 0.8rem"><span class="kpi-val" style="color:${riskColor(dist.risk_score)};font-size:1.2rem">${dist.risk_score}</span><span class="kpi-label">RISK SCORE</span></div>
+  </div><div style="display:flex;gap:6px;flex-wrap:wrap">`;
+  yrs.forEach(y=>{
+    const v=dist.yearly_floods[y], c=gc(v);
+    const active=selectedYear&&parseInt(y)===selectedYear;
+    html+=`<div style="width:60px;height:60px;border-radius:7px;background:${c.bg};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;transition:transform 0.2s;${active?'outline:3px solid #00d4ff;transform:scale(1.12);':''}" title="${y}: ${v} events"><span style="font-family:Syne,sans-serif;font-size:1.2rem;font-weight:800;color:${c.tx};line-height:1">${v}</span><span style="font-family:DM Mono,monospace;font-size:0.5rem;color:${c.tx};opacity:0.8;margin-top:2px">${y}</span></div>`;
+  });
+  html+=`</div><div style="display:flex;align-items:center;gap:0.8rem;margin-top:0.8rem;font-family:DM Mono,monospace;font-size:0.62rem;color:#5a7a9e"><span>Low</span><div style="flex:1;max-width:200px;height:6px;border-radius:3px;background:linear-gradient(to right,#0d3b1a,#00c853,#ffab00,#ff3d00)"></div><span>High Intensity</span></div>`;
+  document.getElementById('calContainer').innerHTML=html;
+}
+</script></body></html>

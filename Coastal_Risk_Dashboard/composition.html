@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Composition</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Composition</span> — Land Use Analysis</div>
+    <div class="ctrl-group"><span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <button class="ctrl-btn" onclick="downloadCSV()">⬇ CSV</button>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Composition</span> — Land Use Breakdown</div>
+      <div class="page-sub">Donut, Treemap, Stacked Bar — how land use shapes coastal vulnerability</div>
+    </div>
+    <div class="grid g2" style="margin-bottom:1.2rem">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Donut — Land Use by District</span><span class="badge b-comp2">Composition</span>
+          <select class="ctrl-select" id="donutSel" onchange="buildDonut()" style="margin-left:auto;font-size:0.68rem"></select>
+          <button class="info-btn" onclick="showInfo('Donut Chart','Shows land use composition for the selected district. Chennai is 72% urban — which explains its flood amplification. Urban surfaces reduce water absorption and increase runoff. Kanyakumari has 28% forest cover, providing natural buffering.')">?</button>
+          <button class="export-btn" onclick="exportChartPNG('donutChart','land_use_donut')">⬇ PNG</button>
+        </div>
+        <canvas id="donutChart"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Treemap — Land Use All Districts</span><span class="badge b-comp2">Composition</span>
+          <button class="info-btn" onclick="showInfo('Treemap','Area-encoded visualization of aggregate land use across all 12 coastal districts. Agriculture dominates — cropland loss during floods is a major economic consequence.')">?</button>
+        </div>
+        <div id="treemapContainer"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Stacked Bar — Land Use per District</span><span class="badge b-comp2">Composition</span><button class="info-btn" onclick="showInfo('Stacked Bar','Compares land use composition across all districts. Differences in urban vs forest vs wetland proportions directly explain why districts with similar coastline lengths have very different flood impacts.')">?</button><button class="export-btn" onclick="exportChartPNG('stackedBar','land_use_stacked')">⬇ PNG</button></div>
+      <canvas id="stackedBar" style="max-height:240px"></canvas>
+    </div>
+  </div>
+</div>
+<div class="year-panel" id="yearPanel"><div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div><div class="yp-stats" id="ypStats"></div><div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events</div><canvas id="ypBar"></canvas></div><div class="yp-hint">Charts updating live</div></div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>
+const LC={urban:'#ff6b35',agriculture:'#7dff8a',forest:'#00dc82',wetland:'#50a0ff',other:'#6b85a8'};
+buildSidebar('composition'); setupYearPanel();
+loadData(()=>{
+  const sel=document.getElementById('donutSel');
+  DATA.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.name;sel.appendChild(o);});
+  setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildAll();});
+  buildAll();
+});
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildAll();}
+function buildAll(){ buildDonut(); buildTreemap(); buildStacked(); }
+function buildDonut(){
+  const id=document.getElementById('donutSel')?.value||DATA[0]?.id;
+  const x=DATA.find(d=>d.id===id); if(!x) return;
+  const keys=Object.keys(x.land_use);
+  makeChart('donutChart',{type:'doughnut',data:{labels:keys.map(k=>k.charAt(0).toUpperCase()+k.slice(1)),datasets:[{data:keys.map(k=>x.land_use[k]),backgroundColor:keys.map(k=>LC[k]),borderColor:'#060d1a',borderWidth:2}]},options:{responsive:true,cutout:'56%',animation:{duration:800,easing:'easeOutQuart'},plugins:{legend:{labels:{color:'#5a7a9e',font:{family:'DM Mono',size:10},boxWidth:12}}}}});
+}
+function buildTreemap(){
+  const c=document.getElementById('treemapContainer'); c.innerHTML='';
+  const d=getActiveData(), W=c.offsetWidth||400, H=240;
+  const lt={};Object.keys(LC).forEach(k=>{lt[k]=d.reduce((s,x)=>s+(x.land_use?.[k]||0),0);});
+  const total=Object.values(lt).reduce((s,v)=>s+v,0);
+  let x=0;
+  Object.entries(lt).sort((a,b)=>b[1]-a[1]).forEach(([key,val])=>{
+    const w=Math.round((val/total)*W);
+    const cell=document.createElement('div'); cell.className='tm-cell';
+    cell.style.cssText=`left:${x}px;top:0;width:${w}px;height:${H}px;background:${LC[key]};`;
+    cell.innerHTML=`<div class="tm-label">${key.toUpperCase()}<br/>${val.toFixed(0)}%</div>`;
+    c.appendChild(cell); x+=w;
+  });
+}
+function buildStacked(){
+  const d=getActiveData(), keys=Object.keys(LC);
+  makeChart('stackedBar',{type:'bar',data:{labels:d.map(x=>x.name.substring(0,5)),datasets:keys.map(k=>({label:k.charAt(0).toUpperCase()+k.slice(1),data:d.map(x=>x.land_use?.[k]||0),backgroundColor:LC[k]+'cc',borderColor:LC[k],borderWidth:1}))},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{labels:{color:'#5a7a9e',font:{family:'DM Mono',size:9},boxWidth:10}}},scales:{x:{...chartDefaults().scales.x,stacked:true},y:{...chartDefaults().scales.y,stacked:true}}}});
+}
+</script></body></html>

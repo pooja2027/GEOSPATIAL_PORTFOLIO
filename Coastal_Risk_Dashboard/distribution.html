@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Distribution</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Distribution</span> — Spread & Anomalies</div>
+    <div class="ctrl-group"><span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <button class="ctrl-btn" onclick="downloadCSV()">⬇ CSV</button>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Distribution</span> Charts</div>
+      <div class="page-sub">Histogram, Box Plot, Dot Plot — spread, range, and anomaly detection</div>
+    </div>
+    <div class="grid g3">
+      <div class="card"><div class="card-header"><span class="card-title">Histogram — Risk Score Distribution</span><span class="badge b-dist">Distribution</span><button class="info-btn" onclick="showInfo('Histogram','Shows how many districts fall in each risk score band. Most districts cluster in medium risk (50–70). Only Chennai and Nagapattinam qualify as high risk (>75). Confirms extreme vulnerability is concentrated, not systemic.')">?</button><button class="export-btn" onclick="exportChartPNG('histChart','histogram')">⬇ PNG</button></div><canvas id="histChart"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Box Plot — Flood Events Spread</span><span class="badge b-dist">Distribution</span><button class="info-btn" onclick="showInfo('Box Plot','Displays spread of annual flood events per district: Q1, median, Q3. Districts with tall bars have high inter-annual variability. Compact bars mean consistent year-to-year flood patterns.')">?</button><button class="export-btn" onclick="exportChartPNG('boxChart','boxplot')">⬇ PNG</button></div><canvas id="boxChart"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Dot Plot — Erosion vs Risk</span><span class="badge b-dist">Distribution</span><button class="info-btn" onclick="showInfo('Dot Plot','Scatter-style dot plot showing relationship between physical erosion rate and composite risk score. Positive correlation visible — higher erosion districts tend toward higher risk. Not perfect because risk also includes population and rainfall.')">?</button><button class="export-btn" onclick="exportChartPNG('dotChart','erosion_vs_risk')">⬇ PNG</button></div><canvas id="dotChart"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Frequency Polygon — Rainfall Distribution</span><span class="badge b-dist">Distribution</span><button class="info-btn"onclick="showInfo('Frequency Polygon — Rainfall Distribution','Line chart connecting midpoints of rainfall class intervals. X-axis shows rainfall ranges (mm) and Y-axis shows number of occurrences. Used to understand distribution shape, skewness, and concentration of rainfall values across coastal districts. Peaks indicate dominant rainfall range, while tails highlight extreme wet or dry conditions.')">?</button><button class="export-btn" onclick="exportChartPNG('freqChart','rainfall_freq')">⬇ PNG</button></div><canvas id="freqChart"></canvas></div>
+      <div class="card" style="grid-column:span 2"><div class="card-header"><span class="card-title">Strip Plot — Risk Scores per Category</span><span class="badge b-dist">Distribution</span><button class="info-btn" onclick="showInfo('Strip Plot','Each district shown as a dot along the risk score axis, grouped by risk category. Reveals clustering and gaps within each category.')">?</button><button class="export-btn" onclick="exportChartPNG('stripChart','strip_plot')">⬇ PNG</button></div><canvas id="stripChart" style="max-height:140px"></canvas></div>
+    </div>
+  </div>
+</div>
+<div class="year-panel" id="yearPanel"><div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div><div class="yp-stats" id="ypStats"></div><div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events</div><canvas id="ypBar"></canvas></div><div class="yp-hint">Charts updating live</div></div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>
+buildSidebar('distribution'); setupYearPanel();
+loadData(()=>{ setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildAll();}); buildAll(); });
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildAll();}
+function buildAll(){ buildHistogram(); buildBoxplot(); buildDotplot(); buildFreq(); buildStrip(); }
+function buildHistogram(){
+  const d=getActiveData();
+  const bins=[{l:'<50',mn:0,mx:50},{l:'50–60',mn:50,mx:60},{l:'60–70',mn:60,mx:70},{l:'70–80',mn:70,mx:80},{l:'80+',mn:80,mx:101}];
+  makeChart('histChart',{type:'bar',data:{labels:bins.map(b=>b.l),datasets:[{data:bins.map(b=>d.filter(x=>x.risk_score>=b.mn&&x.risk_score<b.mx).length),backgroundColor:['#00c853aa','#7dff8aaa','#ffab00aa','#ff6b35aa','#ff3d00aa'],borderColor:['#00c853','#7dff8a','#ffab00','#ff6b35','#ff3d00'],borderWidth:1,borderRadius:4}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false}}}});
+}
+function buildBoxplot(){
+  const d=getActiveData();
+  const q=arr=>{const s=[...arr].sort((a,b)=>a-b);return{mn:s[0],q1:s[Math.floor(s.length*0.25)],med:s[Math.floor(s.length*0.5)],q3:s[Math.floor(s.length*0.75)]};};
+  const st=d.map(x=>({nm:x.name.substring(0,5),...q(Object.values(x.yearly_floods||{}))}));
+  makeChart('boxChart',{type:'bar',data:{labels:st.map(s=>s.nm),datasets:[{label:'Min–Q1',data:st.map(s=>s.q1-s.mn),backgroundColor:'transparent',borderColor:'transparent',stack:'b'},{label:'Q1–Med',data:st.map(s=>s.med-s.q1),backgroundColor:'#50a0ff88',borderColor:'#50a0ff',borderWidth:1,stack:'b',borderRadius:2},{label:'Med–Q3',data:st.map(s=>s.q3-s.med),backgroundColor:'#be78ff88',borderColor:'#be78ff',borderWidth:1,stack:'b',borderRadius:2}]},options:{...chartDefaults()}});
+}
+function buildDotplot(){
+  const d=getActiveData();
+  makeChart('dotChart',{type:'scatter',data:{datasets:[{label:'Districts',data:d.map(x=>({x:x.erosion_rate,y:x.risk_score})),backgroundColor:d.map(x=>riskColor(x.risk_score)+'bb'),borderColor:d.map(x=>riskColor(x.risk_score)),borderWidth:1,pointRadius:8,pointHoverRadius:11}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false},tooltip:{...chartDefaults().plugins.tooltip,callbacks:{label:ctx=>`${d[ctx.dataIndex].name}: ${ctx.raw.x}m/yr, Risk ${ctx.raw.y}`}}},scales:{x:{...chartDefaults().scales.x,title:{display:true,text:'Erosion Rate (m/yr)',color:'#5a7a9e',font:{family:'DM Mono',size:9}}},y:{...chartDefaults().scales.y,title:{display:true,text:'Risk Score',color:'#5a7a9e',font:{family:'DM Mono',size:9}}}}}});
+}
+function buildFreq(){
+  const d=getActiveData();
+  const allRain=d.flatMap(x=>Object.values(x.rainfall_mm||{}));
+  const bins=[600,800,1000,1200,1400,1600,1800,2000,2200,2400,3000];
+  const counts=bins.slice(0,-1).map((mn,i)=>allRain.filter(v=>v>=mn&&v<bins[i+1]).length);
+  makeChart('freqChart',{type:'line',data:{labels:bins.slice(0,-1).map((v,i)=>`${v}–${bins[i+1]}`),datasets:[{label:'Frequency',data:counts,borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.08)',fill:true,tension:0.4,borderWidth:2,pointRadius:5,pointBackgroundColor:'#00d4ff'}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false}},scales:{x:{...chartDefaults().scales.x,ticks:{color:'#5a7a9e',font:{family:'DM Mono',size:8}}},y:{...chartDefaults().scales.y,title:{display:true,text:'Count',color:'#5a7a9e',font:{family:'DM Mono',size:9}}}}}});
+}
+function buildStrip(){
+  const d=getActiveData();
+  const cats=['LOW','MEDIUM','HIGH'];
+  const datasets=cats.map((cat,ci)=>{
+    const pts=d.filter(x=>riskLabel(x.risk_score)===cat);
+    return{label:cat,data:pts.map(x=>({x:x.risk_score,y:ci})),backgroundColor:pts.map(x=>x._color+'cc'),borderColor:pts.map(x=>x._color),borderWidth:1,pointRadius:10,pointHoverRadius:13};
+  });
+  makeChart('stripChart',{type:'scatter',data:{datasets},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{labels:{color:'#5a7a9e',font:{family:'DM Mono',size:10},boxWidth:10}}},scales:{x:{...chartDefaults().scales.x,min:30,max:100,title:{display:true,text:'Risk Score',color:'#5a7a9e',font:{family:'DM Mono',size:9}}},y:{...chartDefaults().scales.y,ticks:{color:'#5a7a9e',font:{family:'DM Mono',size:9},callback:v=>cats[v]||''},min:-0.5,max:2.5,grid:{color:'#1a2d47'}}}}});
+}
+</script></body></html>

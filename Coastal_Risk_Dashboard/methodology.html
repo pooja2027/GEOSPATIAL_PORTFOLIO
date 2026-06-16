@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Methodology</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Methodology</span> — Documentation</div>
+    <button class="ctrl-btn" onclick="downloadCSV()">⬇ Export CSV</button>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Methodology</span> & Documentation</div>
+      <div class="page-sub">Risk formula · Data sources · Visualization design rationale</div>
+    </div>
+
+    <!-- Risk Formula -->
+    <div class="card" style="margin-bottom:1.2rem">
+      <div class="card-header"><span class="card-title">Risk Score Formula</span><span class="badge b-spec">Formula</span></div>
+      <div class="formula-box">Risk Score = 0.35 × Population + 0.25 × Erosion + 0.20 × Rainfall + 0.20 × Coastline</div>
+      <p style="font-family:var(--fb);font-size:0.78rem;color:var(--text-muted);margin:0.6rem 0;line-height:1.7">All variables are min-max normalized across all 12 districts before weighting, ensuring comparability across different units. Final score is scaled 0–100.</p>
+      <div style="display:flex;flex-direction:column;gap:0.8rem;margin-top:0.8rem">
+        <div class="fw-item"><span style="font-family:var(--fm);font-size:0.72rem;color:var(--text)">Population Exposed — 35%</span><div class="fw-bar-wrap"><div class="fw-bar" style="width:35%;background:#ff5078"></div><span class="fw-pct">35%</span></div><span class="fw-desc">Highest weight: human exposure drives real-world impact. A short but densely populated coast scores higher than a long unpopulated one.</span></div>
+        <div class="fw-item"><span style="font-family:var(--fm);font-size:0.72rem;color:var(--text)">Erosion Rate — 25%</span><div class="fw-bar-wrap"><div class="fw-bar" style="width:25%;background:#ff6b35"></div><span class="fw-pct">25%</span></div><span class="fw-desc">Physical coastline loss in m/year. Structural hazard representing long-term coastal degradation.</span></div>
+        <div class="fw-item"><span style="font-family:var(--fm);font-size:0.72rem;color:var(--text)">Rainfall Intensity — 20%</span><div class="fw-bar-wrap"><div class="fw-bar" style="width:20%;background:#ffc800"></div><span class="fw-pct">20%</span></div><span class="fw-desc">Annual rainfall in mm. Precipitation drives flood triggering — particularly extreme monsoon events.</span></div>
+        <div class="fw-item"><span style="font-family:var(--fm);font-size:0.72rem;color:var(--text)">Coastline Length — 20%</span><div class="fw-bar-wrap"><div class="fw-bar" style="width:20%;background:#50a0ff"></div><span class="fw-pct">20%</span></div><span class="fw-desc">Total coastline in km. Longer exposure to marine hazards including storm surge and sea-level rise.</span></div>
+      </div>
+    </div>
+
+    <div class="method-grid">
+      <div class="card"><div class="card-header"><span class="card-title">Study Area</span><span class="badge b-geo">Spatial</span></div><p style="font-family:var(--fb);font-size:0.78rem;color:var(--text-muted);line-height:1.7">This dashboard analyzes coastal vulnerability across 12 districts in Tamil Nadu — from Chennai in the north to Kanyakumari in the south — selected because they represent the complete eastern and southern shoreline exposed to the Bay of Bengal and Indian Ocean. These districts collectively span 1,323 km of coastline and expose over 3,764 thousand people to coastal hazards.</p></div>
+      <div class="card"><div class="card-header"><span class="card-title">Variables</span><span class="badge b-comp">Data</span></div><p style="font-family:var(--fb);font-size:0.78rem;color:var(--text-muted);line-height:1.7">Six variables were integrated: coastline length (km), population exposed to coastal flooding and erosion (thousands), historical shoreline erosion rate (m/year), annual flood event counts from 2010–2023, yearly rainfall totals (mm), and land-use composition (urban, agriculture, forest, wetland, other). These represent hazard, exposure, and vulnerability dimensions of coastal risk.</p></div>
+      <div class="card"><div class="card-header"><span class="card-title">Visualization Design</span><span class="badge b-multi">Design</span></div><p style="font-family:var(--fb);font-size:0.78rem;color:var(--text-muted);line-height:1.7">Chart types were selected for analytical purpose, not aesthetic variety. Comparison charts (bar, lollipop, dumbbell) address district-level ranking. Trend charts (multi-line, area, calendar) capture temporal patterns. Distribution charts (histogram, box plot, dot plot) reveal spread and anomalies. Relationship charts (scatter, bubble, heatmap) expose correlations. Composition charts explain land-use differences. Multivariate charts present multiple factors simultaneously.</p></div>
+      <div class="card"><div class="card-header"><span class="card-title">Data Note</span><span class="badge b-dist">Source</span></div><p style="font-family:var(--fb);font-size:0.78rem;color:var(--text-muted);line-height:1.7">Data is synthetically generated based on published ranges from INCOIS Coastal Vulnerability Index reports and IMD district rainfall records for Tamil Nadu coastal districts (2010–2023). Values are realistic and internally consistent. Key sources: INCOIS CVI, IMD District Rainfall, Census of India 2011, NCSCM Coastal District Reports, data.gov.in flood records.</p></div>
+    </div>
+
+    <div id="chartReferenceGrid"
+     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.8rem;margin-top:0.4rem">
+    </div>
+</div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script>
+const chartTypes = [
+ ['Choropleth Map','Spatial distribution of risk','Geospatial','b-geo'],
+ ['Bar Chart','Categorical comparison','Comparison','b-comp'],
+ ['Lollipop Chart','Ranked comparison, reduced clutter','Comparison','b-comp'],
+ ['Dumbbell Chart','Range across time (min-max)','Comparison','b-comp'],
+ ['Multi-line Chart','Trend over time, multiple series','Trend','b-trend'],
+ ['Area Chart','Cumulative trend over time','Trend','b-trend'],
+ ['Step Chart','Discrete year-to-year changes','Trend','b-trend'],
+ ['Calendar Heatmap','Temporal intensity per district','Trend','b-trend'],
+ ['Histogram','Score distribution across categories','Distribution','b-dist'],
+ ['Box Plot','Spread: Q1, median, Q3','Distribution','b-dist'],
+ ['Dot Plot','Two-variable relationship','Distribution','b-dist'],
+ ['Strip Plot','Individual values by category','Distribution','b-dist'],
+ ['Scatter Plot','Correlation between two variables','Relationship','b-rel'],
+ ['Bubble Chart','Three variables simultaneously','Relationship','b-rel'],
+ ['Heatmap Table','2D matrix: district × year','Relationship','b-rel'],
+ ['Donut Chart','Part-to-whole composition','Composition','b-comp2'],
+ ['Treemap','Area-encoded composition','Composition','b-comp2'],
+ ['Stacked Bar','Composition comparison across groups','Composition','b-comp2'],
+ ['Radar Chart','Multi-factor profile per district','Multivariate','b-multi'],
+ ['Parallel Coordinates','All factors simultaneously','Multivariate','b-multi'],
+ ['Risk Gauge','Quick status per district','Specialized','b-spec'],
+ ['Frequency Polygon','Distribution shape','Distribution','b-dist']
+];
+
+document.getElementById("chartReferenceGrid").innerHTML =
+chartTypes.map(([name,desc,cat,cls]) => `
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.7rem">
+  <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem">
+    <span class="badge ${cls}">${cat}</span>
+  </div>
+  <div style="font-family:var(--fm);font-size:0.7rem;color:var(--text)">${name}</div>
+  <div style="font-family:var(--fb);font-size:0.68rem;color:var(--text-muted);margin-top:0.2rem">${desc}</div>
+</div>
+`).join('');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>buildSidebar('methodology');loadData(()=>{});</script>
+</body>
+</html>

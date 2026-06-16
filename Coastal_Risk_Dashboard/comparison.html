@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TN Coastal Risk — Comparison</title>
+<link rel="stylesheet" href="css/style.css"/></head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span>Comparison</span> — Bar, Lollipop, Dumbbell</div>
+    <div class="ctrl-group"><span class="ctrl-label">SORT</span>
+      <select class="ctrl-select" id="sortSel" onchange="sortCol=this.value;buildAll()">
+        <option value="risk_score">Risk Score</option>
+        <option value="coastline_km">Coastline</option>
+        <option value="population_exposed">Population</option>
+        <option value="erosion_rate">Erosion Rate</option>
+      </select>
+    </div>
+    <div class="ctrl-group"><span class="ctrl-label">FILTER</span>
+      <div class="search-wrap"><input type="text" class="search-input" id="districtSearch" placeholder="Search district…"/><div class="search-drop" id="searchDrop"></div></div>
+      <button class="ctrl-btn" id="btnClearFilter" style="display:none" onclick="clearFilter()">✕ Clear</button>
+    </div>
+    <div class="ctrl-group"><span class="ctrl-label">COMPARE</span>
+      <select class="ctrl-select" id="compareA"><option value="">District A</option></select>
+      <select class="ctrl-select" id="compareB"><option value="">District B</option></select>
+      <button class="ctrl-btn" id="btnClearCompare" style="display:none">✕</button>
+    </div>
+    <button class="ctrl-btn" onclick="downloadCSV()">⬇ CSV</button>
+  </div>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-title"><span>Comparison</span> Charts</div>
+      <div class="page-sub">Bar, Lollipop, Dumbbell — district-level ranking and range analysis</div>
+    </div>
+    <div class="grid g3" style="margin-bottom:1.2rem">
+      <div class="card"><div class="card-header"><span class="card-title">Coastline Length (km)</span><span class="badge b-comp">Comparison</span><button class="info-btn" onclick="showInfo('Coastline Length','Bar chart used for accurate comparison of discrete categories. Ramanathapuram has the longest coastline at 486 km — nearly 3× the next highest.')">?</button><button class="export-btn" onclick="exportChartPNG('barCoast','coastline')">⬇ PNG</button></div><canvas id="barCoast"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Population Exposed (K)</span><span class="badge b-comp">Comparison</span><button class="info-btn" onclick="showInfo('Population Exposed','Population directly exposed to coastal flood and erosion risk. Chennai stands out at 892K — over 2× the next district. Population carries 35% weight in the risk formula.')">?</button><button class="export-btn" onclick="exportChartPNG('barPop','population')">⬇ PNG</button></div><canvas id="barPop"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Erosion Rate (m/yr)</span><span class="badge b-comp">Comparison</span><button class="info-btn" onclick="showInfo('Erosion Rate','Physical rate of coastline recession. Nagapattinam leads at 3.4 m/yr. Bar color encodes risk category to connect erosion data to its risk implication.')">?</button><button class="export-btn" onclick="exportChartPNG('barErosion','erosion')">⬇ PNG</button></div><canvas id="barErosion"></canvas></div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><div class="card-header"><span class="card-title">Lollipop — Risk Score Ranking</span><span class="badge b-comp">Comparison</span><button class="info-btn" onclick="showInfo('Lollipop Chart','Reduces visual clutter vs full bars. The dot precisely encodes risk value while the stem shows baseline. Effective for ranking when the exact endpoint matters more than area.')">?</button><button class="export-btn" onclick="exportChartPNG('lollipop','risk_ranking')">⬇ PNG</button></div><canvas id="lollipop"></canvas></div>
+      <div class="card"><div class="card-header"><span class="card-title">Dumbbell — Flood Events Range</span><span class="badge b-comp">Comparison</span><button class="info-btn" onclick="showInfo('Dumbbell Chart','Shows the full range of annual flood events per district across 14 years — minimum to maximum. Wide gap = high inter-annual variability. Nagapattinam shows the widest range.')">?</button><button class="export-btn" onclick="exportChartPNG('dumbbell','flood_range')">⬇ PNG</button></div><canvas id="dumbbell"></canvas></div>
+    </div>
+  </div>
+</div>
+<div class="year-panel" id="yearPanel"><div class="yp-head"><span class="yp-yr" id="ypYear">—</span><span class="yp-lbl">YEAR SNAPSHOT</span><button class="yp-close" id="ypClose">✕</button></div><div class="yp-stats" id="ypStats"></div><div class="yp-chart-wrap"><div class="yp-chart-title">Flood Events</div><canvas id="ypBar"></canvas></div><div class="yp-hint">Charts updating live</div></div>
+<div class="modal-overlay" id="infoModal" onclick="closeInfo()"><div class="modal-box" onclick="event.stopPropagation()"><div class="modal-head"><h3 id="infoTitle"></h3><button class="modal-close" onclick="closeInfo()">✕</button></div><div class="modal-body" id="infoBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="js/nav.js"></script><script src="js/data.js"></script>
+<script>
+buildSidebar('comparison'); setupYearPanel();
+loadData(()=>{ setupDistrictSearch(id=>{selectedDistrict=id;activeDistricts=new Set([id]);document.getElementById('btnClearFilter').style.display='inline-block';buildAll();}); setupCompare(buildAll); buildAll(); });
+function clearFilter(){selectedDistrict=null;activeDistricts=new Set(DATA.map(d=>d.id));document.getElementById('btnClearFilter').style.display='none';document.getElementById('districtSearch').value='';buildAll();}
+function buildAll(){ buildBars(); buildLollipop(); buildDumbbell(); }
+function getBg(d){return compareA&&compareB?(d.id===compareA?'#00d4ffcc':'#ff6b35cc'):d._color+'cc';}
+function getBorder(d){return compareA&&compareB?(d.id===compareA?'#00d4ff':'#ff6b35'):d._color;}
+function buildBars(){
+  const s=[...getActiveData()].sort((a,b)=>b[sortCol]-a[sortCol]);
+  const lb=s.map(d=>d.name.substring(0,6));
+  ['barCoast','barPop','barErosion'].forEach((id,i)=>{
+    const key=['coastline_km','population_exposed','erosion_rate'][i];
+    const bg=id==='barErosion'?s.map(d=>riskColor(d.risk_score)+'cc'):s.map(getBg);
+    const br=id==='barErosion'?s.map(d=>riskColor(d.risk_score)):s.map(getBorder);
+    makeChart(id,{type:'bar',data:{labels:lb,datasets:[{data:s.map(d=>d[key]),backgroundColor:bg,borderColor:br,borderWidth:2,borderRadius:4}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false}}}});
+  });
+}
+function buildLollipop(){
+  const s=[...getActiveData()].sort((a,b)=>b.risk_score-a.risk_score);
+  makeChart('lollipop',{type:'scatter',data:{datasets:[{data:s.map((d,i)=>({x:i,y:d.risk_score})),backgroundColor:s.map(d=>compareA&&compareB?(d.id===compareA?'#00d4ff':'#ff6b35'):riskColor(d.risk_score)),borderColor:s.map(d=>compareA&&compareB?(d.id===compareA?'#00d4ff':'#ff6b35'):riskColor(d.risk_score)),pointRadius:9,pointHoverRadius:12}]},options:{...chartDefaults(),plugins:{...chartDefaults().plugins,legend:{display:false},tooltip:{...chartDefaults().plugins.tooltip,callbacks:{label:ctx=>`${s[Math.round(ctx.raw.x)]?.name}: ${ctx.raw.y}`}}},scales:{x:{type:'linear',min:-0.5,max:s.length-0.5,ticks:{color:'#5a7a9e',font:{family:'DM Mono',size:9},callback:v=>s[Math.round(v)]?.name.substring(0,7)||''},grid:{color:'#1a2d47'}},y:{min:0,max:100,ticks:{color:'#5a7a9e',font:{family:'DM Mono',size:9}},grid:{color:'#1a2d47'}}}}});
+}
+function buildDumbbell(){
+  const d=getActiveData(), yrs=Object.keys(DATA[0].yearly_floods);
+  makeChart('dumbbell',{type:'bar',data:{labels:d.map(x=>x.name.substring(0,6)),datasets:[{label:'Min',data:d.map(x=>Math.min(...yrs.map(y=>x.yearly_floods?.[y]||0))),backgroundColor:'#00c85388',borderColor:'#00c853',borderWidth:1,borderRadius:2,barThickness:7},{label:'Max',data:d.map(x=>Math.max(...yrs.map(y=>x.yearly_floods?.[y]||0))),backgroundColor:'#ff3d0088',borderColor:'#ff3d00',borderWidth:1,borderRadius:2,barThickness:7}]},options:{...chartDefaults(),indexAxis:'y'}});
+}
+</script></body></html>
